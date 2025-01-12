@@ -13,37 +13,38 @@ def fetch_articles():
                                   'q': 'artificial intelligence news latest developments',
                                   'count': 10
                               })
-        response.raise_for_status()  # Raise an error for bad status codes
+        response.raise_for_status()
         data = response.json()
         
-        # Debug print
-        print("API Response structure:", json.dumps(data.keys(), indent=2))
+        print("Full API Response:", json.dumps(data, indent=2))  # Debug full response
         
-        # Extract and transform the relevant fields from the Brave API response
         articles = []
-        if not data:
-            print("Warning: Empty response from API")
+        if not isinstance(data, dict):
+            print(f"Warning: API response is not a dictionary, got {type(data)}")
             return articles
             
-        if 'web' not in data:
-            print("Warning: 'web' key not found in response")
-            print("Available keys:", list(data.keys()))
+        web_data = data.get('web', {})
+        if not isinstance(web_data, dict):
+            print(f"Warning: 'web' is not a dictionary, got {type(web_data)}")
             return articles
             
-        if 'results' not in data['web']:
-            print("Warning: 'results' key not found in web data")
-            print("Available keys in web:", list(data['web'].keys()))
+        results = web_data.get('results', [])
+        if not isinstance(results, list):
+            print(f"Warning: 'results' is not a list, got {type(results)}")
             return articles
             
-        for result in data['web']['results']:
-            print("Processing result:", json.dumps(result.keys(), indent=2))
-            articles.append({
-                'title': result.get('title', ''),
-                'description': result.get('description', ''),
-                'url': result.get('url', '')
-            })
-            
+        for result in results:
+            if isinstance(result, dict):
+                articles.append({
+                    'title': str(result.get('title', '')),
+                    'description': str(result.get('description', '')),
+                    'url': str(result.get('url', ''))
+                })
+            else:
+                print(f"Warning: result is not a dictionary, got {type(result)}")
+                
         print(f"Processed {len(articles)} articles")
+        print("First article structure:", json.dumps(articles[0] if articles else {}, indent=2))
         return articles
         
     except requests.exceptions.RequestException as e:
@@ -51,17 +52,42 @@ def fetch_articles():
         return []
     except json.JSONDecodeError as e:
         print(f"Error decoding API response: {e}")
+        print(f"Response content: {response.text}")  # Debug response content
         return []
     except Exception as e:
-        print(f"Unexpected error: {e}")
+        print(f"Unexpected error in fetch_articles: {e}")
         return []
 
 def create_article_page(articles, date_str):
     if not articles:
         print("Warning: No articles provided to create_article_page")
-        articles = []  # Ensure articles is at least an empty list
+        return f'''
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI News - {date_str}</title>
+    <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+    <header>
+        <h1>AI News - {date_str}</h1>
+        <nav>
+            <a href="/index.html">Home</a>
+        </nav>
+    </header>
+    <main class="container">
+        <div class="article-grid">
+            <p>No articles found</p>
+        </div>
+    </main>
+</body>
+</html>
+'''
         
-    page_content = f'''
+    try:
+        page_content = f'''
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -80,27 +106,39 @@ def create_article_page(articles, date_str):
     <main class="container">
         <div class="article-grid">
 '''    
-    for article in articles:
-        try:
-            page_content += f'''
+        for i, article in enumerate(articles):
+            try:
+                if not isinstance(article, dict):
+                    print(f"Warning: article {i} is not a dictionary: {type(article)}")
+                    continue
+                    
+                title = str(article.get('title', 'No Title'))
+                description = str(article.get('description', 'No Description'))
+                url = str(article.get('url', '#'))
+                
+                page_content += f'''
             <article class="article-card">
-                <h2>{article['title']}</h2>
-                <p>{article['description']}</p>
-                <a href="{article['url']}" target="_blank">Read More →</a>
+                <h2>{title}</h2>
+                <p>{description}</p>
+                <a href="{url}" target="_blank">Read More →</a>
             </article>
 '''
-        except Exception as e:
-            print(f"Error processing article: {e}")
-            print(f"Article data: {article}")
-            continue
-            
-    page_content += '''
+            except Exception as e:
+                print(f"Error processing article {i}: {e}")
+                print(f"Article data: {article}")
+                continue
+                
+        page_content += '''
         </div>
     </main>
 </body>
 </html>
 '''
-    return page_content
+        return page_content
+        
+    except Exception as e:
+        print(f"Error in create_article_page: {e}")
+        return f"<html><body><h1>Error creating page: {e}</h1></body></html>"
 
 def update_index_page(latest_dates):
     try:
@@ -148,6 +186,9 @@ def main():
         articles = fetch_articles()
         if not articles:
             print("Warning: No articles fetched")
+        else:
+            print(f"Main: Got {len(articles)} articles")
+            print("Main: First article:", json.dumps(articles[0], indent=2))
         
         # Create new article page
         page_content = create_article_page(articles, date_str)
@@ -155,13 +196,12 @@ def main():
             f.write(page_content)
         
         # Update main index page with link to new articles
-        # Get list of all article directories
         article_dates = sorted([d for d in os.listdir('articles') if os.path.isdir(f'articles/{d}')], reverse=True)
-        update_index_page(article_dates[:5])  # Show last 5 dates
+        update_index_page(article_dates[:5])
         
     except Exception as e:
         print(f"Error in main function: {e}")
-        raise  # Re-raise the exception to ensure the script fails if there's an error
+        raise
 
 if __name__ == '__main__':
     main()
