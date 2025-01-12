@@ -6,14 +6,23 @@ import pytz
 import re
 
 def fetch_articles():
-    # This would be replaced with actual Brave API call
     response = requests.get('https://api.search.brave.com/res/v1/web/search',
                           headers={'X-Subscription-Token': os.environ.get('BRAVE_API_KEY')},
                           params={
                               'q': 'artificial intelligence news latest developments',
                               'count': 10
                           })
-    return response.json()
+    data = response.json()
+    # Extract and transform the relevant fields from the Brave API response
+    articles = []
+    if 'web' in data and 'results' in data['web']:
+        for result in data['web']['results']:
+            articles.append({
+                'title': result.get('title', ''),
+                'description': result.get('description', ''),
+                'url': result.get('url', '')
+            })
+    return articles
 
 def create_article_page(articles, date_str):
     page_content = f'''
@@ -43,7 +52,6 @@ def create_article_page(articles, date_str):
                 <a href="{article['url']}" target="_blank">Read More →</a>
             </article>
 '''
-
     page_content += '''
         </div>
     </main>
@@ -55,7 +63,6 @@ def create_article_page(articles, date_str):
 def update_index_page(latest_dates):
     with open('index.html', 'r') as f:
         content = f.read()
-
     # Add archive section if it doesn't exist
     if '<section class="archive">' not in content:
         insert_pos = content.find('</main>')
@@ -72,14 +79,13 @@ def update_index_page(latest_dates):
         </section>
 '''
         content = content[:insert_pos] + archive_section + content[insert_pos:]
-
         with open('index.html', 'w') as f:
             f.write(content)
 
 def main():
     # Create necessary directories
     os.makedirs('articles', exist_ok=True)
-
+    
     # Get current date in UTC
     now = datetime.now(pytz.UTC)
     date_str = now.strftime('%Y-%m-%d-%H')
@@ -87,7 +93,7 @@ def main():
     # Create directory for current date
     article_dir = f'articles/{date_str}'
     os.makedirs(article_dir, exist_ok=True)
-
+    
     # Fetch and save articles
     articles = fetch_articles()
     
@@ -95,7 +101,7 @@ def main():
     page_content = create_article_page(articles, date_str)
     with open(f'{article_dir}/index.html', 'w') as f:
         f.write(page_content)
-
+    
     # Update main index page with link to new articles
     # Get list of all article directories
     article_dates = sorted([d for d in os.listdir('articles') if os.path.isdir(f'articles/{d}')], reverse=True)
