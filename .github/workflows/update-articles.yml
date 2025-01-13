@@ -26,6 +26,11 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Update articles
+        run: python .github/scripts/update_articles.py
+        env:
+          BRAVE_API_KEY: ${{ secrets.BRAVE_API_KEY }}
+
       - name: Commit and push if changed
         run: |
           git config --local user.email "action@github.com"
